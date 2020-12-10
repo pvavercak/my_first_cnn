@@ -26,7 +26,6 @@ from sklearn.metrics import classification_report
 from plotly.graph_objects import Scatter
 from plotly.subplots import make_subplots
 
-#### globals ####
 
 ## input data ##
 IMDIR = 'data/images'
@@ -34,15 +33,19 @@ DF_STYLES = pandas.read_csv('data/styles.csv', error_bad_lines=False, warn_bad_l
 Y_COLUMN = 'masterCategory'
 Y_CLASSES = DF_STYLES[Y_COLUMN].unique()
 
+## best params ##
 SQUARED_IMSIZE = 50 # size the images are going to be represented
+BEST_LR = 0.001 # from models comparision graph
+BEST_BS = 256 # from models comparision graph
+
 
 ## output data ##
-CNN_NAME = "CNN-clothes-{0}x{0}-{1}".format(SQUARED_IMSIZE, int(time.time()))
-TENSORBOARD = TensorBoard(log_dir='history/{0}'.format(CNN_NAME))
 MODELS_DIR = 'models/'
 
-# STOP_CONDITION = 1500
-STOP_CONDITION = 45000
+
+# get rid of low occurencies
+DF_STYLES.drop(DF_STYLES[DF_STYLES[Y_COLUMN] == 'Sporting Goods'].index, inplace=True)
+DF_STYLES.drop(DF_STYLES[DF_STYLES[Y_COLUMN] == 'Home'].index, inplace=True)
 
 
 def show_image_data(imageData):
@@ -52,7 +55,7 @@ def show_image_data(imageData):
 
 
 def load_parse_images():
-    global DF_STYLES, STOP_CONDITION
+    global DF_STYLES
     training_data = []
     for image in os.listdir(IMDIR):
         try:
@@ -63,8 +66,6 @@ def load_parse_images():
             if not id.empty:
                 training_data.append([imData, id[Y_COLUMN].values[0]])
             # show_image_data(imData)
-            if len(training_data) > STOP_CONDITION:
-                break
         except Exception as e:
             pass
     return training_data
@@ -128,6 +129,8 @@ def train_with_different_params(model, X_train, y_train):
     batch_sizes = [8, 32, 256]
     for lr in learning_rates:
         for bs in batch_sizes:
+            cnn_name = "cnn_lr-{0}_bs-{1}_{2}".format(lr, bs, int(time.time()))
+            tensor_board = TensorBoard(log_dir='history/{0}'.format(cnn_name))
             model.compile(
                 loss='categorical_crossentropy',
                 optimizer=Adam(lr=lr),
@@ -137,12 +140,13 @@ def train_with_different_params(model, X_train, y_train):
                 y_train,
                 batch_size=bs,
                 validation_split=0.3,
-                epochs=5)
+                epochs=5,
+                callbacks=[tensor_board])
             save_model(
                 model,
                 '{0}/cnn_lr-{1}_bs-{2}.model'.format(MODELS_DIR, lr, bs),
                 overwrite=True)
-            time.sleep(300.0) # get CPU some rest
+            time.sleep(30.0)
 
 
 def get_existing_models(directory):
@@ -185,17 +189,32 @@ def evaluate_models_in_dir(models_dir, X_test, y_test):
     compare_models(models, accs, losses)
 
 
-# re-generate our pickled data
+def analyze_best_cnn(the_model, X_test, y_test):
+    global Y_CLASSES
+    eval = the_model.evaluate(X_test, y_test)
+    print("Loss  of  the  best  fitted model: {0}".format(eval[0]))
+    print("Accuracy of the best fitted model: {0}".format(eval[1]))
+
+    y_pred = numpy.argmax(the_model.predict(X_test), axis=-1)
+    y_test = numpy.argmax(y_test, axis=-1)
+
+    classreport = classification_report(
+        y_test,
+        y_pred,target_names=Y_CLASSES)
+    print(classreport)
+
+
+# re-generate our pickled data in case we have changed some params
 save_data_to_pickle()
 
-# load data from pickles
+# load pre-made data from pickles
 X, y = load_data_from_pickle()
 
 # split loaded data into train and test sets
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25)
 
 # build a model for training
-model = get_model(64, (3,3), (2,2), X_train.shape[1:], len(y_train[0]))
+model = get_model(128, (3,3), (2,2), X_train.shape[1:], len(y_train[0]))
 
 # train the same model but with different learning rate and batch size
 train_with_different_params(model, X_train, y_train)
@@ -203,28 +222,8 @@ train_with_different_params(model, X_train, y_train)
 # get all .model files from specified directory and test them
 evaluate_models_in_dir(MODELS_DIR, X_test, y_test)
 
-# model.compile(
-#     loss='categorical_crossentropy',
-#     optimizer=Adam(lr=0.004),
-#     metrics=['accuracy'])
+# best_model = load_model(
+#         '{0}/cnn_lr-{1}_bs-{2}.model'.format(
+#             MODELS_DIR, BEST_LR, BEST_BS))
 
-# model.fit(
-#     X_train,
-#     y_train,
-#     batch_size=32,
-#     validation_split=0.3,
-#     epochs=5,
-#     callbacks=[TENSORBOARD])
-
-# # evaluate
-# eval = model.evaluate(X_test, y_test)
-# print(eval[0], eval[1])
-
-# # confusion matrix
-# y_pred = numpy.argmax(model.predict(X_test), axis=-1)
-# y_test = numpy.argmax(y_test, axis=-1)
-
-# classreport = classification_report(
-#     y_test,
-#     y_pred)
-# print(classreport)
+# analyze_best_cnn(best_model, X_test, y_test)
