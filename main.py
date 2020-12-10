@@ -31,7 +31,6 @@ from plotly.subplots import make_subplots
 IMDIR = 'data/images'
 DF_STYLES = pandas.read_csv('data/styles.csv', error_bad_lines=False, warn_bad_lines=False)
 Y_COLUMN = 'masterCategory'
-Y_CLASSES = DF_STYLES[Y_COLUMN].unique()
 
 ## best params ##
 SQUARED_IMSIZE = 50 # size the images are going to be represented
@@ -46,7 +45,7 @@ MODELS_DIR = 'models/'
 # get rid of low occurencies
 DF_STYLES.drop(DF_STYLES[DF_STYLES[Y_COLUMN] == 'Sporting Goods'].index, inplace=True)
 DF_STYLES.drop(DF_STYLES[DF_STYLES[Y_COLUMN] == 'Home'].index, inplace=True)
-
+Y_CLASSES = DF_STYLES[Y_COLUMN].unique()
 
 def show_image_data(imageData):
     plt.imshow(imageData, cmap='gray')
@@ -200,12 +199,13 @@ def analyze_best_cnn(the_model, X_test, y_test):
 
     classreport = classification_report(
         y_test,
-        y_pred,target_names=Y_CLASSES)
+        y_pred,
+        target_names=Y_CLASSES)
     print(classreport)
 
 
 # re-generate our pickled data in case we have changed some params
-save_data_to_pickle()
+# save_data_to_pickle()
 
 # load pre-made data from pickles
 X, y = load_data_from_pickle()
@@ -214,16 +214,16 @@ X, y = load_data_from_pickle()
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25)
 
 # build a model for training
-model = get_model(128, (3,3), (2,2), X_train.shape[1:], len(y_train[0]))
+# model = get_model(128, (3,3), (2,2), X_train.shape[1:], len(y_train[0]))
 
 # train the same model but with different learning rate and batch size
-train_with_different_params(model, X_train, y_train)
+# train_with_different_params(model, X_train, y_train)
 
 # get all .model files from specified directory and test them
-evaluate_models_in_dir(MODELS_DIR, X_test, y_test)
+# evaluate_models_in_dir(MODELS_DIR, X_test, y_test)
 
-# best_model = load_model(
-#         '{0}/cnn_lr-{1}_bs-{2}.model'.format(
-#             MODELS_DIR, BEST_LR, BEST_BS))
+best_model = load_model(
+        '{0}/cnn_lr-{1}_bs-{2}.model'.format(
+            MODELS_DIR, BEST_LR, BEST_BS))
 
-# analyze_best_cnn(best_model, X_test, y_test)
+analyze_best_cnn(best_model, X_test, y_test)
